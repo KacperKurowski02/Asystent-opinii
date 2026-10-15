@@ -1,0 +1,82 @@
+{
+  "liczba_opinii": 10,
+  "sentyment": [
+    {
+      "sentyment": "negatywny",
+      "liczba": 4,
+      "procent": 40.0
+    },
+    {
+      "sentyment": "pozytywny",
+      "liczba": 3,
+      "procent": 30.0
+    },
+    {
+      "sentyment": "neutralny",
+      "liczba": 3,
+      "procent": 30.0
+    }
+  ],
+  "kategorie": [
+    {
+      "kategoria": "gastronomia",
+      "liczba": 2,
+      "negatywne": 1
+    },
+    {
+      "kategoria": "obsluga",
+      "liczba": 2,
+      "negatywne": 1
+    },
+    {
+      "kategoria": "pokoj",
+      "liczba": 2,
+      "negatywne": 1
+    },
+    {
+      "kategoria": "ceny",
+      "liczba": 1,
+      "negatywne": 1
+    },
+    {
+      "kategoria": "spa",
+      "liczba": 2,
+      "negatywne": 0
+    },
+    {
+      "kategoria": "inne",
+      "liczba": 1,
+      "negatywne": 0
+    }
+  ],
+  "negatywne": [
+    {
+      "id": 9,
+      "data": "2026-09-14",
+      "gosc": "Natalia P.",
+      "kategoria": "pokoj",
+      "opinia": "Hałas z wesela do 2 w nocy, nie dało się spać."
+    },
+    {
+      "id": 6,
+      "data": "2026-09-10",
+      "gosc": "Piotr N.",
+      "kategoria": "ceny",
+      "opinia": "Parking płatny i nikt nas o tym nie uprzedził przy rezerwacji."
+    },
+    {
+      "id": 3,
+      "data": "2026-09-05",
+      "gosc": "Ewa S.",
+      "kategoria": "obsluga",
+      "opinia": "Czekaliśmy 40 minut na zameldowanie, nikt nie przeprosił."
+    },
+    {
+      "id": 1,
+      "data": "2026-09-02",
+      "gosc": "Anna K.",
+      "kategoria": "gastronomia",
+      "opinia": "Pokój czysty, ale śniadanie skończyło się o 9:30 i nic już nie było."
+    }
+  ]
+}

@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Asystent opinii</title>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --surface: #ffffff;
+    --text: #1d1d1f;
+    --muted: #6b6b70;
+    --border: #e3e3e0;
+    --neg: #b42318;
+    --neg-bg: #fdecea;
+    --neu: #6b6b70;
+    --neu-bg: #efefed;
+    --pos: #1a7f37;
+    --pos-bg: #e6f4ea;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161618;
+      --surface: #1f1f22;
+      --text: #ececee;
+      --muted: #a0a0a8;
+      --border: #333338;
+      --neg: #ff8a80;
+      --neg-bg: #3a1d1b;
+      --neu: #b8b8c0;
+      --neu-bg: #2a2a2e;
+      --pos: #7ee2a0;
+      --pos-bg: #18301f;
+      color-scheme: dark;
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    padding: 2rem 1rem 3rem;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+
+  main { max-width: 56rem; margin: 0 auto; }
+
+  h1 { font-size: 1.75rem; line-height: 1.2; margin: 0 0 .25rem; }
+  .podtytul { color: var(--muted); margin: 0 0 2rem; }
+
+  section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+  h2 { font-size: 1.15rem; margin: 0 0 .75rem; }
+
+  .przewijanie { overflow-x: auto; }
+
+  table { width: 100%; border-collapse: collapse; }
+  th, td {
+    text-align: left;
+    padding: .6rem .75rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  th {
+    font-size: .8rem;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--muted);
+    font-weight: 600;
+  }
+  tr:last-child td { border-bottom: 0; }
+  td.liczba, th.liczba { text-align: right; font-variant-numeric: tabular-nums; }
+  td.data { white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+  .etykieta {
+    display: inline-block;
+    padding: .1rem .55rem;
+    border-radius: 999px;
+    font-size: .85rem;
+    font-weight: 500;
+  }
+  .negatywny { color: var(--neg); background: var(--neg-bg); }
+  .neutralny { color: var(--neu); background: var(--neu-bg); }
+  .pozytywny { color: var(--pos); background: var(--pos-bg); }
+  .zero { color: var(--muted); }
+
+  .blad {
+    color: var(--neg);
+    background: var(--neg-bg);
+    padding: 1rem;
+    border-radius: 8px;
+  }
+
+  /* Telefon: opinie negatywne jako karty zamiast szerokiej tabeli */
+  @media (max-width: 600px) {
+    body { padding-top: 1.25rem; }
+    section { padding: 1rem; }
+    #negatywne thead { display: none; }
+    #negatywne tr {
+      display: block;
+      padding: .75rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+    #negatywne tr:last-child { border-bottom: 0; }
+    #negatywne td { display: block; border: 0; padding: .1rem 0; }
+    #negatywne td.meta { color: var(--muted); font-size: .9rem; }
+    #negatywne td.opinia { margin-top: .25rem; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Analiza opinii gości</h1>
+  <p class="podtytul" id="podsumowanie">Wczytywanie danych…</p>
+
+  <section>
+    <h2>Sentyment</h2>
+    <div class="przewijanie">
+      <table id="sentyment">
+        <thead><tr><th>Sentyment</th><th class="liczba">Liczba</th><th class="liczba">Procent</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Kategorie</h2>
+    <div class="przewijanie">
+      <table id="kategorie">
+        <thead><tr><th>Kategoria</th><th class="liczba">Opinie</th><th class="liczba">Negatywne</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Opinie negatywne</h2>
+    <div class="przewijanie">
+      <table id="negatywne">
+        <thead><tr><th>Data</th><th>Gość</th><th>Kategoria</th><th>Opinia</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<script>
+  const NAZWY_KATEGORII = {
+    gastronomia: "Gastronomia",
+    obsluga: "Obsługa",
+    pokoj: "Pokój",
+    ceny: "Ceny",
+    spa: "SPA",
+    inne: "Inne",
+  };
+
+  function komorka(tekst, klasa) {
+    const td = document.createElement("td");
+    td.textContent = tekst;
+    if (klasa) td.className = klasa;
+    return td;
+  }
+
+  function etykieta(sentyment) {
+    const td = document.createElement("td");
+    const span = document.createElement("span");
+    span.className = "etykieta " + sentyment;
+    span.textContent = sentyment;
+    td.appendChild(span);
+    return td;
+  }
+
+  function wiersz(tbody, komorki) {
+    const tr = document.createElement("tr");
+    komorki.forEach((td) => tr.appendChild(td));
+    tbody.appendChild(tr);
+  }
+
+  function formatujDate(iso) {
+    const [r, m, d] = iso.split("-");
+    return `${d}.${m}.${r}`;
+  }
+
+  function render(dane) {
+    document.getElementById("podsumowanie").textContent =
+      `Łącznie opinii: ${dane.liczba_opinii}`;
+
+    const tSent = document.querySelector("#sentyment tbody");
+    dane.sentyment.forEach((s) => wiersz(tSent, [
+      etykieta(s.sentyment),
+      komorka(s.liczba, "liczba"),
+      komorka(s.procent.toLocaleString("pl-PL", { minimumFractionDigits: 1 }) + "%", "liczba"),
+    ]));
+
+    const tKat = document.querySelector("#kategorie tbody");
+    dane.kategorie.forEach((k) => wiersz(tKat, [
+      komorka(NAZWY_KATEGORII[k.kategoria] || k.kategoria),
+      komorka(k.liczba, "liczba"),
+      komorka(k.negatywne, "liczba" + (k.negatywne === 0 ? " zero" : "")),
+    ]));
+
+    const tNeg = document.querySelector("#negatywne tbody");
+    dane.negatywne.forEach((o) => wiersz(tNeg, [
+      komorka(formatujDate(o.data), "data meta"),
+      komorka(o.gosc, "meta"),
+      komorka(NAZWY_KATEGORII[o.kategoria] || o.kategoria, "meta"),
+      komorka(o.opinia, "opinia"),
+    ]));
+  }
+
+  fetch("data.json")
+    .then((r) => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    })
+    .then(render)
+    .catch((e) => {
+      const p = document.getElementById("podsumowanie");
+      p.className = "blad";
+      p.textContent =
+        `Nie udało się wczytać data.json (${e.message}). ` +
+        "Uruchom najpierw: python3 analiza.py, a stronę otwórz przez serwer: " +
+        "python3 -m http.server, potem http://localhost:8000";
+    });
+</script>
+</body>
+</html>
