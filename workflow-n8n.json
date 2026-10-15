@@ -1,0 +1,246 @@
+{
+  "name": "Asystent opinii",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "a1",
+      "name": "Start ręczny",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "10cXhX5YxdfdC8hxsFB2RRji5qxnPycp8m_t2qBXpYc8",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "opinie"
+        },
+        "options": {}
+      },
+      "id": "a2",
+      "name": "Pobierz opinie",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        224,
+        0
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "ZuwVNZQd57zeNBpL",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a3",
+      "name": "Tylko nowe",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model: 'claude-haiku-5-5',\n  max_tokens: 2000,\n  system: 'Jesteś asystentem działu jakości w hotelu 4*. Dostajesz jedną opinię gościa. Zwróć WYŁĄCZNIE obiekt JSON, bez żadnego tekstu przed ani po, z kluczami: sentyment (jedno z: pozytywny, neutralny, negatywny), kategoria (jedno z: pokoj, gastronomia, spa, obsluga, ceny, inne), odpowiedz (uprzejma odpowiedź hotelu po polsku, maksymalnie 2 zdania, per Pani/Pan). Jeśli opinia dotyczy kilku obszarów, wybierz ten, na który gość narzeka najbardziej. Nie obiecuj rabatów ani rekompensat. Nie wymyślaj faktów.',\n  messages: [{ role: 'user', content: 'Opinia: ' + $json.opinia }]\n}) }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1
+            }
+          }
+        }
+      },
+      "id": "a4",
+      "name": "Zapytaj Claude",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        672,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "mUQ0U9AlxjP0CdkU",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Odpowiedź Claude to lista bloków (np. 'thinking', potem 'text').\n// Bierzemy blok typu 'text' — to w nim jest nasz JSON.\nconst blok = $json.content.find(b => b.type === 'text');\n\n// Czasem model owija JSON w ```json ... ``` — usuwamy to\nconst tekst = blok.text.replace(/```json|```/g, '').trim();\nconst wynik = JSON.parse(tekst);\n\nreturn {\n  json: {\n    id: $('Tylko nowe').item.json.id,   // id wiersza z wcześniejszego węzła\n    sentyment: wynik.sentyment,\n    kategoria: wynik.kategoria,\n    odpowiedz: wynik.odpowiedz,\n    status: 'gotowe'\n  }\n};"
+      },
+      "id": "a5",
+      "name": "Rozpakuj JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "10cXhX5YxdfdC8hxsFB2RRji5qxnPycp8m_t2qBXpYc8",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "opinie"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "a6",
+      "name": "Zapisz wynik",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1104,
+        0
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "ZuwVNZQd57zeNBpL",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Start ręczny": {
+      "main": [
+        [
+          {
+            "node": "Pobierz opinie",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pobierz opinie": {
+      "main": [
+        [
+          {
+            "node": "Tylko nowe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tylko nowe": {
+      "main": [
+        [
+          {
+            "node": "Zapytaj Claude",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Zapytaj Claude": {
+      "main": [
+        [
+          {
+            "node": "Rozpakuj JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rozpakuj JSON": {
+      "main": [
+        [
+          {
+            "node": "Zapisz wynik",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
+  },
+  "versionId": "afedeb5f-9d5a-4b4e-8693-d873fd2076a5",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "296c0e9b84dafdcdb814d0ef4d19c6e17f2d84eb1013a90b08811136392d80da"
+  },
+  "nodeGroups": [],
+  "id": "AnKJUxj0mTomyV8e",
+  "tags": []
+}

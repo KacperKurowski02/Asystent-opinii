@@ -11,6 +11,7 @@
     --text: #1d1d1f;
     --muted: #6b6b70;
     --border: #e3e3e0;
+    --link: #0b57d0;
     --neg: #b42318;
     --neg-bg: #fdecea;
     --neu: #6b6b70;
@@ -26,6 +27,7 @@
       --text: #ececee;
       --muted: #a0a0a8;
       --border: #333338;
+      --link: #8ab4f8;
       --neg: #ff8a80;
       --neg-bg: #3a1d1b;
       --neu: #b8b8c0;
@@ -48,8 +50,11 @@
 
   main { max-width: 56rem; margin: 0 auto; }
 
+  a { color: var(--link); }
+
   h1 { font-size: 1.75rem; line-height: 1.2; margin: 0 0 .25rem; }
-  .podtytul { color: var(--muted); margin: 0 0 2rem; }
+  .podtytul { color: var(--muted); margin: 0; }
+  .aktualizacja { color: var(--muted); font-size: .9rem; margin: .25rem 0 2rem; }
 
   section {
     background: var(--surface);
@@ -79,6 +84,7 @@
   tr:last-child td { border-bottom: 0; }
   td.liczba, th.liczba { text-align: right; font-variant-numeric: tabular-nums; }
   td.data { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  td.pusto { color: var(--muted); }
 
   .etykieta {
     display: inline-block;
@@ -95,9 +101,26 @@
   .blad {
     color: var(--neg);
     background: var(--neg-bg);
-    padding: 1rem;
+    padding: .75rem 1rem;
     border-radius: 8px;
+    margin: 0 0 1.5rem;
   }
+  .blad[hidden] { display: none; }
+
+  /* Jak to działa */
+  figure { margin: 0 0 1rem; }
+  figure img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #fff;
+  }
+  figcaption { color: var(--muted); font-size: .85rem; margin-top: .4rem; }
+  ol.wezly { margin: 0 0 1rem; padding-left: 1.4rem; }
+  ol.wezly li { margin-bottom: .4rem; }
+  .pobierz { font-weight: 600; }
 
   /* Telefon: opinie negatywne jako karty zamiast szerokiej tabeli */
   @media (max-width: 600px) {
@@ -119,7 +142,9 @@
 <body>
 <main>
   <h1>Analiza opinii gości</h1>
-  <p class="podtytul" id="podsumowanie">Wczytywanie danych…</p>
+  <p class="podtytul" id="podsumowanie">Wczytywanie danych z arkusza…</p>
+  <p class="aktualizacja" id="aktualizacja">Ostatnia aktualizacja: —</p>
+  <p class="blad" id="blad" hidden></p>
 
   <section>
     <h2>Sentyment</h2>
@@ -150,9 +175,32 @@
       </table>
     </div>
   </section>
+
+  <section>
+    <h2>Jak to działa</h2>
+    <figure>
+      <img src="n8n-workflow.png" width="2436" height="654"
+           alt="Workflow w n8n: Start ręczny, Pobierz opinie, Tylko nowe, Zapytaj Claude, Rozpakuj JSON, Zapisz wynik">
+      <figcaption>Workflow w n8n, który analizuje nowe opinie i zapisuje wyniki w arkuszu.</figcaption>
+    </figure>
+    <ol class="wezly">
+      <li><strong>Start ręczny</strong>: uruchamia workflow przyciskiem w n8n.</li>
+      <li><strong>Pobierz opinie</strong>: czyta wszystkie wiersze z arkusza Google Sheets „opinie”.</li>
+      <li><strong>Tylko nowe</strong>: przepuszcza tylko wiersze z pustym statusem, czyli jeszcze nieprzeanalizowane.</li>
+      <li><strong>Zapytaj Claude</strong>: wysyła każdą opinię do Claude API, które zwraca sentyment, kategorię i propozycję odpowiedzi.</li>
+      <li><strong>Rozpakuj JSON</strong>: wyciąga JSON z odpowiedzi modelu i dodaje status „gotowe”.</li>
+      <li><strong>Zapisz wynik</strong>: aktualizuje wiersz w arkuszu (dopasowanie po kolumnie <code>id</code>).</li>
+    </ol>
+    <p>Ta strona co 60 sekund pobiera arkusz jako CSV i sama przelicza tabele powyżej.</p>
+    <p><a class="pobierz" href="workflow-n8n.json" download>Pobierz workflow-n8n.json</a> (do zaimportowania w n8n)</p>
+  </section>
 </main>
 
 <script>
+  const ADRES_CSV =
+    "https://docs.google.com/spreadsheets/d/10cXhX5YxdfdC8hxsFB2RRji5qxnPycp8m_t2qBXpYc8/gviz/tq?tqx=out:csv&sheet=opinie";
+  const ODSWIEZANIE_MS = 60 * 1000;
+
   const NAZWY_KATEGORII = {
     gastronomia: "Gastronomia",
     obsluga: "Obsługa",
@@ -161,6 +209,73 @@
     spa: "SPA",
     inne: "Inne",
   };
+
+  // Parser CSV: obsługuje pola w cudzysłowach, "" jako cudzysłów,
+  // przecinki i znaki nowej linii wewnątrz pól.
+  function parsujCSV(tekst) {
+    const wiersze = [];
+    let wiersz = [];
+    let pole = "";
+    let wCudzyslowie = false;
+
+    for (let i = 0; i < tekst.length; i++) {
+      const z = tekst[i];
+      if (wCudzyslowie) {
+        if (z === '"') {
+          if (tekst[i + 1] === '"') { pole += '"'; i++; }
+          else wCudzyslowie = false;
+        } else {
+          pole += z;
+        }
+      } else if (z === '"') {
+        wCudzyslowie = true;
+      } else if (z === ",") {
+        wiersz.push(pole); pole = "";
+      } else if (z === "\n" || z === "\r") {
+        if (z === "\r" && tekst[i + 1] === "\n") i++;
+        wiersz.push(pole); pole = "";
+        wiersze.push(wiersz); wiersz = [];
+      } else {
+        pole += z;
+      }
+    }
+    if (pole !== "" || wiersz.length) { wiersz.push(pole); wiersze.push(wiersz); }
+
+    const [naglowki, ...dane] = wiersze;
+    const klucze = naglowki.map((n) => n.trim());
+    return dane
+      .filter((w) => w.some((p) => p.trim() !== ""))
+      .map((w) => Object.fromEntries(klucze.map((k, j) => [k, (w[j] || "").trim()])));
+  }
+
+  // Te same zestawienia co zapytania SQL w analiza.py
+  function przelicz(opinie) {
+    const razem = opinie.length;
+
+    const sent = new Map();
+    const kat = new Map();
+    for (const o of opinie) {
+      sent.set(o.sentyment, (sent.get(o.sentyment) || 0) + 1);
+      const k = kat.get(o.kategoria) || { kategoria: o.kategoria, liczba: 0, negatywne: 0 };
+      k.liczba++;
+      if (o.sentyment === "negatywny") k.negatywne++;
+      kat.set(o.kategoria, k);
+    }
+
+    const sentyment = [...sent]
+      .map(([s, n]) => ({ sentyment: s, liczba: n, procent: Math.round(1000 * n / razem) / 10 }))
+      .sort((a, b) => b.liczba - a.liczba || a.sentyment.localeCompare(b.sentyment, "pl"));
+
+    const kategorie = [...kat.values()]
+      .sort((a, b) => b.negatywne - a.negatywne || b.liczba - a.liczba ||
+                      a.kategoria.localeCompare(b.kategoria, "pl"));
+
+    const negatywne = opinie
+      .filter((o) => o.sentyment === "negatywny")
+      .sort((a, b) => b.data.localeCompare(a.data) || Number(b.id) - Number(a.id));
+
+    return { razem, sentyment, kategorie, negatywne };
+  }
 
   function komorka(tekst, klasa) {
     const td = document.createElement("td");
@@ -178,58 +293,70 @@
     return td;
   }
 
-  function wiersz(tbody, komorki) {
-    const tr = document.createElement("tr");
-    komorki.forEach((td) => tr.appendChild(td));
-    tbody.appendChild(tr);
+  function wypelnij(selektor, wiersze, liczbaKolumn) {
+    const tbody = document.querySelector(selektor + " tbody");
+    tbody.replaceChildren();
+    if (!wiersze.length) {
+      const td = komorka("Brak danych", "pusto");
+      td.colSpan = liczbaKolumn;
+      wiersze = [[td]];
+    }
+    for (const komorki of wiersze) {
+      const tr = document.createElement("tr");
+      komorki.forEach((td) => tr.appendChild(td));
+      tbody.appendChild(tr);
+    }
   }
 
   function formatujDate(iso) {
     const [r, m, d] = iso.split("-");
-    return `${d}.${m}.${r}`;
+    return d && m && r ? `${d}.${m}.${r}` : iso;
   }
 
-  function render(dane) {
-    document.getElementById("podsumowanie").textContent =
-      `Łącznie opinii: ${dane.liczba_opinii}`;
+  const nazwaKategorii = (k) => NAZWY_KATEGORII[k] || k;
 
-    const tSent = document.querySelector("#sentyment tbody");
-    dane.sentyment.forEach((s) => wiersz(tSent, [
+  function render(w) {
+    document.getElementById("podsumowanie").textContent = `Łącznie opinii: ${w.razem}`;
+
+    wypelnij("#sentyment", w.sentyment.map((s) => [
       etykieta(s.sentyment),
       komorka(s.liczba, "liczba"),
       komorka(s.procent.toLocaleString("pl-PL", { minimumFractionDigits: 1 }) + "%", "liczba"),
-    ]));
+    ]), 3);
 
-    const tKat = document.querySelector("#kategorie tbody");
-    dane.kategorie.forEach((k) => wiersz(tKat, [
-      komorka(NAZWY_KATEGORII[k.kategoria] || k.kategoria),
+    wypelnij("#kategorie", w.kategorie.map((k) => [
+      komorka(nazwaKategorii(k.kategoria)),
       komorka(k.liczba, "liczba"),
       komorka(k.negatywne, "liczba" + (k.negatywne === 0 ? " zero" : "")),
-    ]));
+    ]), 3);
 
-    const tNeg = document.querySelector("#negatywne tbody");
-    dane.negatywne.forEach((o) => wiersz(tNeg, [
+    wypelnij("#negatywne", w.negatywne.map((o) => [
       komorka(formatujDate(o.data), "data meta"),
       komorka(o.gosc, "meta"),
-      komorka(NAZWY_KATEGORII[o.kategoria] || o.kategoria, "meta"),
+      komorka(nazwaKategorii(o.kategoria), "meta"),
       komorka(o.opinia, "opinia"),
-    ]));
+    ]), 4);
   }
 
-  fetch("data.json")
-    .then((r) => {
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      return r.json();
-    })
-    .then(render)
-    .catch((e) => {
-      const p = document.getElementById("podsumowanie");
-      p.className = "blad";
-      p.textContent =
-        `Nie udało się wczytać data.json (${e.message}). ` +
-        "Uruchom najpierw: python3 analiza.py, a stronę otwórz przez serwer: " +
-        "python3 -m http.server, potem http://localhost:8000";
-    });
+  async function odswiez() {
+    const blad = document.getElementById("blad");
+    try {
+      const odp = await fetch(ADRES_CSV + "&t=" + Date.now(), { cache: "no-store" });
+      if (!odp.ok) throw new Error(`HTTP ${odp.status}`);
+      const opinie = parsujCSV(await odp.text()).filter((o) => o.status);
+      render(przelicz(opinie));
+      blad.hidden = true;
+      document.getElementById("aktualizacja").textContent =
+        "Ostatnia aktualizacja: " + new Date().toLocaleTimeString("pl-PL");
+    } catch (e) {
+      // Zostawiamy poprzednie dane, pokazujemy tylko komunikat
+      blad.textContent = `Nie udało się pobrać danych z arkusza (${e.message}). Kolejna próba za minutę.`;
+      blad.hidden = false;
+    }
+  }
+
+  odswiez();
+  setInterval(odswiez, ODSWIEZANIE_MS);
 </script>
 </body>
 </html>
