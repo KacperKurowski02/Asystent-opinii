@@ -1,3 +1,4 @@
 .env
 opinie.db
 __pycache__/
+.DS_Store
