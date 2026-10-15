@@ -18,6 +18,12 @@
     --neu-bg: #efefed;
     --pos: #1a7f37;
     --pos-bg: #e6f4ea;
+    /* Kolory wykresów (sprawdzone pod kątem daltonizmu) */
+    --wyk-pozytywny: #2e9e5b;
+    --wyk-neutralny: #a8a8ae;
+    --wyk-negatywny: #b3261e;
+    --wyk-reszta: #cfd8e3;
+    --wyk-os: #e3e3e0;
     color-scheme: light;
   }
   @media (prefers-color-scheme: dark) {
@@ -34,6 +40,11 @@
       --neu-bg: #2a2a2e;
       --pos: #7ee2a0;
       --pos-bg: #18301f;
+      --wyk-pozytywny: #38ab68;
+      --wyk-neutralny: #6b6b73;
+      --wyk-negatywny: #d9483f;
+      --wyk-reszta: #3d4654;
+      --wyk-os: #333338;
       color-scheme: dark;
     }
   }
@@ -107,6 +118,81 @@
   }
   .blad[hidden] { display: none; }
 
+  /* Kafelki */
+  .kafelki {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  .kafelek {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+  }
+  .kafelek .etyk { color: var(--muted); font-size: .9rem; margin: 0; }
+  .kafelek .wartosc { font-size: 2.25rem; font-weight: 600; line-height: 1.15; margin: .25rem 0; }
+  .kafelek .dopisek { color: var(--muted); font-size: .85rem; margin: 0; }
+
+  /* Wykresy */
+  .wykresy {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0 1.5rem;
+  }
+  @media (min-width: 760px) {
+    .wykresy { grid-template-columns: 2fr 3fr; }
+  }
+  .wykres { position: relative; }
+  .wykres svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .wykres text { fill: var(--text); font: inherit; font-size: 13px; }
+  .wykres text.wyciszony { fill: var(--muted); }
+  .wykres .os { stroke: var(--wyk-os); stroke-width: 1; }
+
+  .kolo-uklad {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1rem 1.5rem;
+  }
+  .kolo-uklad .wykres { flex: 0 1 12rem; min-width: 9rem; }
+
+  .legenda {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: .35rem 1rem;
+    font-size: .9rem;
+  }
+  .legenda.pion { flex-direction: column; }
+  .legenda li { display: flex; align-items: center; gap: .45rem; }
+  .legenda .wartosc-leg { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .probka {
+    width: .75rem;
+    height: .75rem;
+    border-radius: 3px;
+    flex: none;
+  }
+  .legenda.nad { margin-bottom: .75rem; }
+
+  .podpowiedz {
+    position: fixed;
+    z-index: 10;
+    pointer-events: none;
+    background: var(--text);
+    color: var(--surface);
+    font-size: .85rem;
+    line-height: 1.35;
+    padding: .4rem .6rem;
+    border-radius: 6px;
+    max-width: 16rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .2);
+  }
+  .podpowiedz[hidden] { display: none; }
+
   /* Jak to działa */
   figure { margin: 0 0 1rem; }
   figure img {
@@ -145,6 +231,45 @@
   <p class="podtytul" id="podsumowanie">Wczytywanie danych z arkusza…</p>
   <p class="aktualizacja" id="aktualizacja">Ostatnia aktualizacja: —</p>
   <p class="blad" id="blad" hidden></p>
+
+  <div class="kafelki">
+    <div class="kafelek">
+      <p class="etyk">Liczba opinii</p>
+      <p class="wartosc" id="k-liczba">—</p>
+      <p class="dopisek">przeanalizowanych przez Claude</p>
+    </div>
+    <div class="kafelek">
+      <p class="etyk">Opinie negatywne</p>
+      <p class="wartosc" id="k-negatywne">—</p>
+      <p class="dopisek" id="k-negatywne-dop">&nbsp;</p>
+    </div>
+    <div class="kafelek">
+      <p class="etyk">Średnio opinii dziennie</p>
+      <p class="wartosc" id="k-dziennie">—</p>
+      <p class="dopisek" id="k-dziennie-dop">&nbsp;</p>
+    </div>
+  </div>
+
+  <div class="wykresy">
+    <section>
+      <h2>Sentyment</h2>
+      <div class="kolo-uklad">
+        <div class="wykres" id="wykres-kolo"></div>
+        <ul class="legenda pion" id="legenda-kolo"></ul>
+      </div>
+    </section>
+
+    <section>
+      <h2>Kategorie: negatywne i wszystkie</h2>
+      <ul class="legenda nad">
+        <li><span class="probka" style="background: var(--wyk-negatywny)"></span>Negatywne</li>
+        <li><span class="probka" style="background: var(--wyk-reszta)"></span>Pozostałe</li>
+      </ul>
+      <div class="wykres" id="wykres-slupki"></div>
+    </section>
+  </div>
+
+  <div class="podpowiedz" id="podpowiedz" role="tooltip" hidden></div>
 
   <section>
     <h2>Sentyment</h2>
@@ -274,7 +399,12 @@
       .filter((o) => o.sentyment === "negatywny")
       .sort((a, b) => b.data.localeCompare(a.data) || Number(b.id) - Number(a.id));
 
-    return { razem, sentyment, kategorie, negatywne };
+    const czasy = opinie.map((o) => Date.parse(o.data)).filter((t) => !Number.isNaN(t));
+    const od = czasy.length ? Math.min(...czasy) : null;
+    const doo = czasy.length ? Math.max(...czasy) : null;
+    const dni = czasy.length ? Math.round((doo - od) / 86400000) + 1 : 0;
+
+    return { razem, sentyment, kategorie, negatywne, od, doo, dni };
   }
 
   function komorka(tekst, klasa) {
@@ -315,8 +445,246 @@
 
   const nazwaKategorii = (k) => NAZWY_KATEGORII[k] || k;
 
+  const liczbaPL = (x, miejsca = 1) =>
+    x.toLocaleString("pl-PL", { minimumFractionDigits: miejsca, maximumFractionDigits: miejsca });
+
+  // ---------- Kafelki ----------
+
+  function renderKafelki(w) {
+    const ustaw = (id, tekst) => { document.getElementById(id).textContent = tekst; };
+    const neg = w.negatywne.length;
+
+    ustaw("k-liczba", w.razem);
+    ustaw("k-negatywne", w.razem ? liczbaPL(100 * neg / w.razem) + "%" : "—");
+    ustaw("k-negatywne-dop", `${neg} z ${w.razem} opinii`);
+
+    if (w.dni) {
+      const dzien = (t) => new Date(t).toLocaleDateString("pl-PL", { day: "2-digit", month: "2-digit", timeZone: "UTC" });
+      const rok = new Date(w.doo).getUTCFullYear();
+      ustaw("k-dziennie", liczbaPL(w.razem / w.dni));
+      ustaw("k-dziennie-dop", `${dzien(w.od)}–${dzien(w.doo)}.${rok} · ${w.dni} ${w.dni === 1 ? "dzień" : "dni"}`);
+    } else {
+      ustaw("k-dziennie", "—");
+      ustaw("k-dziennie-dop", "brak dat");
+    }
+  }
+
+  // ---------- Wykresy (SVG) ----------
+
+  const SVG_NS = "http://www.w3.org/2000/svg";
+  const KOLORY_SENTYMENTU = {
+    pozytywny: "--wyk-pozytywny",
+    neutralny: "--wyk-neutralny",
+    negatywny: "--wyk-negatywny",
+  };
+  const KOLEJNOSC_SENTYMENTU = ["pozytywny", "neutralny", "negatywny"];
+
+  function el(nazwa, atrybuty = {}, rodzic) {
+    const e = document.createElementNS(SVG_NS, nazwa);
+    for (const [k, v] of Object.entries(atrybuty)) e.setAttribute(k, v);
+    if (rodzic) rodzic.appendChild(e);
+    return e;
+  }
+
+  const kolorZmiennej = (nazwa) =>
+    getComputedStyle(document.documentElement).getPropertyValue(nazwa).trim();
+
+  // Biały albo ciemny tekst na wypełnieniu, zależnie od jasności koloru
+  function tekstNaKolorze(hex) {
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+      .map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.3 ? "#1d1d1f" : "#ffffff";
+  }
+
+  function renderKolo(w) {
+    const pojemnik = document.getElementById("wykres-kolo");
+    const legenda = document.getElementById("legenda-kolo");
+    pojemnik.replaceChildren();
+    legenda.replaceChildren();
+
+    const dane = [...w.sentyment].sort((a, b) =>
+      KOLEJNOSC_SENTYMENTU.indexOf(a.sentyment) - KOLEJNOSC_SENTYMENTU.indexOf(b.sentyment));
+
+    const R = 100;
+    const svg = el("svg", {
+      viewBox: `0 0 ${2 * R} ${2 * R}`,
+      role: "img",
+      "aria-label": "Wykres kołowy sentymentu: " +
+        dane.map((s) => `${s.sentyment} ${s.liczba} (${liczbaPL(s.procent)}%)`).join(", "),
+    }, pojemnik);
+
+    if (!w.razem) {
+      el("circle", { cx: R, cy: R, r: R - 1, fill: "none", class: "os" }, svg);
+      return;
+    }
+
+    const powierzchnia = kolorZmiennej("--surface");
+    let kat = -Math.PI / 2; // start na godzinie 12
+    for (const s of dane) {
+      const kolor = kolorZmiennej(KOLORY_SENTYMENTU[s.sentyment] || "--wyk-neutralny");
+      const rozpietosc = 2 * Math.PI * s.liczba / w.razem;
+      const tip = `${s.sentyment}: ${s.liczba} (${liczbaPL(s.procent)}%)`;
+      const wspolne = { fill: kolor, stroke: powierzchnia, "stroke-width": 2, "data-tip": tip };
+
+      if (s.liczba === w.razem) {
+        el("circle", { cx: R, cy: R, r: R - 1, ...wspolne }, svg);
+      } else {
+        const x1 = R + R * Math.cos(kat), y1 = R + R * Math.sin(kat);
+        const x2 = R + R * Math.cos(kat + rozpietosc), y2 = R + R * Math.sin(kat + rozpietosc);
+        const duzy = rozpietosc > Math.PI ? 1 : 0;
+        el("path", { d: `M${R},${R} L${x1},${y1} A${R},${R} 0 ${duzy} 1 ${x2},${y2} Z`, ...wspolne }, svg);
+      }
+
+      // Procent na wycinku, tylko gdy się mieści
+      if (rozpietosc > 0.5) {
+        const srodek = kat + rozpietosc / 2;
+        const t = el("text", {
+          x: R + 0.6 * R * Math.cos(srodek),
+          y: R + 0.6 * R * Math.sin(srodek),
+          "text-anchor": "middle",
+          "dominant-baseline": "central",
+          style: `fill: ${tekstNaKolorze(kolor)}; font-size: 15px; font-weight: 600; pointer-events: none`,
+        }, svg);
+        t.textContent = Math.round(s.procent) + "%";
+      }
+      kat += rozpietosc;
+
+      const li = document.createElement("li");
+      const probka = document.createElement("span");
+      probka.className = "probka";
+      probka.style.background = kolor;
+      const nazwa = document.createElement("span");
+      nazwa.textContent = s.sentyment;
+      const wartosc = document.createElement("span");
+      wartosc.className = "wartosc-leg";
+      wartosc.textContent = `${s.liczba} · ${liczbaPL(s.procent)}%`;
+      li.append(probka, nazwa, wartosc);
+      legenda.appendChild(li);
+    }
+  }
+
+  // Prostokąt z zaokrąglonym prawym końcem (koniec słupka), lewy koniec prosty
+  function sciezkaSlupka(x, y, szer, wys, zaokr) {
+    const r = Math.min(zaokr, szer / 2, wys / 2);
+    if (!zaokr || r <= 0) return `M${x},${y} h${szer} v${wys} h${-szer} Z`;
+    return `M${x},${y} h${szer - r} a${r},${r} 0 0 1 ${r},${r} v${wys - 2 * r} ` +
+           `a${r},${r} 0 0 1 ${-r},${r} h${-(szer - r)} Z`;
+  }
+
+  function renderSlupki(w) {
+    const pojemnik = document.getElementById("wykres-slupki");
+    pojemnik.replaceChildren();
+    if (!w.kategorie.length) {
+      pojemnik.textContent = "Brak danych";
+      return;
+    }
+
+    const SZER = Math.max(pojemnik.clientWidth, 260);
+    const ETYKIETY = 96;   // kolumna z nazwami kategorii
+    const WARTOSC = 44;    // miejsce na „2 z 3” za słupkiem
+    const WIERSZ = 34;
+    const GRUBOSC = 18;
+    const PRZERWA = 2;
+    const WYS = w.kategorie.length * WIERSZ;
+    const maks = Math.max(...w.kategorie.map((k) => k.liczba));
+    const skala = (SZER - ETYKIETY - WARTOSC) / maks;
+
+    const svg = el("svg", {
+      viewBox: `0 0 ${SZER} ${WYS}`,
+      width: SZER,
+      height: WYS,
+      role: "img",
+      "aria-label": "Wykres słupkowy kategorii: " +
+        w.kategorie.map((k) => `${nazwaKategorii(k.kategoria)}: negatywne ${k.negatywne} z ${k.liczba}`).join(", "),
+    }, pojemnik);
+
+    const negKolor = kolorZmiennej("--wyk-negatywny");
+    const resztaKolor = kolorZmiennej("--wyk-reszta");
+
+    w.kategorie.forEach((k, i) => {
+      const y = i * WIERSZ + (WIERSZ - GRUBOSC) / 2;
+      const srodekY = i * WIERSZ + WIERSZ / 2;
+      const nazwa = nazwaKategorii(k.kategoria);
+      const tip = `${nazwa}: negatywne ${k.negatywne} z ${k.liczba}`;
+      const g = el("g", { "data-tip": tip }, svg);
+
+      // Większy, niewidoczny cel dla myszy/palca
+      el("rect", { x: 0, y: i * WIERSZ, width: SZER, height: WIERSZ, fill: "transparent" }, g);
+
+      const etykieta = el("text", { x: ETYKIETY - 10, y: srodekY, "text-anchor": "end", "dominant-baseline": "central" }, g);
+      etykieta.textContent = nazwa;
+
+      const szerNeg = k.negatywne * skala;
+      const szerCala = k.liczba * skala;
+      const reszta = k.liczba - k.negatywne;
+
+      if (k.negatywne) {
+        const szer = reszta ? szerNeg - PRZERWA / 2 : szerNeg;
+        el("path", { d: sciezkaSlupka(ETYKIETY, y, szer, GRUBOSC, reszta ? 0 : 4), fill: negKolor }, g);
+      }
+      if (reszta) {
+        const start = k.negatywne ? ETYKIETY + szerNeg + PRZERWA / 2 : ETYKIETY;
+        el("path", { d: sciezkaSlupka(start, y, ETYKIETY + szerCala - start, GRUBOSC, 4), fill: resztaKolor }, g);
+      }
+
+      const wartosc = el("text", { x: ETYKIETY + szerCala + 8, y: srodekY, "dominant-baseline": "central", class: "wyciszony" }, g);
+      wartosc.textContent = `${k.negatywne} z ${k.liczba}`;
+    });
+
+    // Linia bazowa
+    el("line", { x1: ETYKIETY, x2: ETYKIETY, y1: 0, y2: WYS, class: "os" }, svg);
+  }
+
+  // ---------- Podpowiedzi (mysz i dotyk) ----------
+
+  const podpowiedz = document.getElementById("podpowiedz");
+
+  function pokazPodpowiedz(e) {
+    const cel = e.target.closest("[data-tip]");
+    if (!cel) { podpowiedz.hidden = true; return; }
+    podpowiedz.textContent = cel.getAttribute("data-tip");
+    podpowiedz.hidden = false;
+    const { offsetWidth: pw, offsetHeight: ph } = podpowiedz;
+    const x = Math.min(e.clientX + 12, window.innerWidth - pw - 8);
+    const y = e.clientY - ph - 12 < 8 ? e.clientY + 16 : e.clientY - ph - 12;
+    podpowiedz.style.left = Math.max(8, x) + "px";
+    podpowiedz.style.top = y + "px";
+  }
+
+  for (const id of ["wykres-kolo", "wykres-slupki"]) {
+    const w = document.getElementById(id);
+    w.addEventListener("pointermove", pokazPodpowiedz);
+    w.addEventListener("pointerdown", pokazPodpowiedz);
+    w.addEventListener("pointerleave", (e) => { if (e.pointerType === "mouse") podpowiedz.hidden = true; });
+  }
+  document.addEventListener("pointerdown", (e) => {
+    if (!e.target.closest(".wykres")) podpowiedz.hidden = true;
+  });
+  window.addEventListener("scroll", () => { podpowiedz.hidden = true; }, { passive: true });
+
+  // ---------- Całość ----------
+
+  let ostatnieWyniki = null;
+
+  function renderWykresy() {
+    if (!ostatnieWyniki) return;
+    renderKolo(ostatnieWyniki);
+    renderSlupki(ostatnieWyniki);
+  }
+
+  // Przerysuj przy zmianie szerokości i przełączeniu jasny/ciemny motyw
+  let poprzedniaSzer = 0;
+  new ResizeObserver(([wpis]) => {
+    const szer = Math.round(wpis.contentRect.width);
+    if (szer !== poprzedniaSzer && ostatnieWyniki) { poprzedniaSzer = szer; renderSlupki(ostatnieWyniki); }
+  }).observe(document.getElementById("wykres-slupki"));
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", renderWykresy);
+
   function render(w) {
+    ostatnieWyniki = w;
     document.getElementById("podsumowanie").textContent = `Łącznie opinii: ${w.razem}`;
+    renderKafelki(w);
+    renderWykresy();
 
     wypelnij("#sentyment", w.sentyment.map((s) => [
       etykieta(s.sentyment),
